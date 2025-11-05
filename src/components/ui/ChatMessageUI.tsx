@@ -1,11 +1,40 @@
-import React from 'react';
-import type { ChatMessage } from '../../types';
+import React, { memo } from 'react';
+import type { ChatMessage, ChartResponse } from '../../types';
 import MarkdownRenderer from './MarkdownRenderer';
+import DonutChart from '../charts/DonutChart';
+import BarChart from '../charts/BarChart';
 
 interface ChatMessageUIProps {
   message?: ChatMessage;
   isLoading?: boolean;
 }
+
+const tryParseChart = (text: string): ChartResponse | null => {
+    let jsonString = text.trim();
+    
+    // Handle markdown code blocks
+    if (jsonString.startsWith('```json')) {
+        jsonString = jsonString.substring(7, jsonString.length - 3).trim();
+    } else if (jsonString.startsWith('```')) {
+        jsonString = jsonString.substring(3, jsonString.length - 3).trim();
+    }
+
+    try {
+        const parsed = JSON.parse(jsonString);
+        if (
+            parsed.type === 'chart' &&
+            (parsed.chartType === 'donut' || parsed.chartType === 'bar') &&
+            parsed.title &&
+            parsed.data
+        ) {
+            return parsed as ChartResponse;
+        }
+    } catch (e) {
+        // Not a valid JSON or not a chart object
+    }
+    return null;
+};
+
 
 const ChatMessageUI: React.FC<ChatMessageUIProps> = ({ message, isLoading }) => {
   const role = message?.role ?? 'assistant';
@@ -28,6 +57,8 @@ const ChatMessageUI: React.FC<ChatMessageUIProps> = ({ message, isLoading }) => 
     );
   }
 
+  const chartData = tryParseChart(content);
+
   return (
     <div className={`flex items-start gap-3 ${role === 'user' ? 'justify-end' : ''}`}>
       {role === 'assistant' && (
@@ -43,7 +74,15 @@ const ChatMessageUI: React.FC<ChatMessageUIProps> = ({ message, isLoading }) => 
         }`}
       >
         <div className="text-sm">
-             <MarkdownRenderer content={content} />
+             {chartData ? (
+                <div className="bg-white rounded-lg p-2 min-w-[400px] md:min-w-[600px]">
+                    <h3 className="text-base font-bold text-center text-gray-800 mb-2">{chartData.title}</h3>
+                    {chartData.chartType === 'donut' && <DonutChart data={chartData.data as any} />}
+                    {chartData.chartType === 'bar' && <BarChart data={chartData.data as any} />}
+                </div>
+             ) : (
+                <MarkdownRenderer content={content} />
+             )}
         </div>
       </div>
       {role === 'user' && (
@@ -55,4 +94,4 @@ const ChatMessageUI: React.FC<ChatMessageUIProps> = ({ message, isLoading }) => 
   );
 };
 
-export default ChatMessageUI;
+export default memo(ChatMessageUI);
