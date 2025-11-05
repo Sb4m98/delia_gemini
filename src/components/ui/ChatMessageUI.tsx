@@ -36,13 +36,13 @@ const ChatMessageUI: React.FC<ChatMessageUIProps> = ({ message, isLoading }) => 
         </div>
       )}
       <div
-        className={`max-w-xs md:max-w-md p-3 rounded-2xl shadow-sm ${
+        className={`p-4 rounded-2xl shadow-sm ${
           role === 'user'
-            ? 'bg-brand-purple text-white rounded-br-none'
-            : 'bg-gray-100 text-gray-800 rounded-bl-none'
+            ? 'bg-brand-purple text-white rounded-br-none max-w-lg'
+            : 'bg-gray-100 text-gray-800 rounded-bl-none max-w-lg lg:max-w-2xl xl:max-w-4xl'
         }`}
       >
-        <div className="text-sm prose prose-sm max-w-none">
+        <div className="text-sm">
              <MarkdownRenderer content={content} />
         </div>
       </div>
