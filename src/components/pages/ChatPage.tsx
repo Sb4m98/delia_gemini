@@ -20,18 +20,18 @@ const ChatPage: React.FC = () => {
     const trimmedInput = userInput.trim();
     if (!trimmedInput || isLoading) return;
 
-    setIsLoading(true);
-    const newHistory = [...chatHistory, { role: 'user' as const, content: trimmedInput }];
-    setChatHistory(newHistory);
+    const newHistoryWithUser = [...chatHistory, { role: 'user' as const, content: trimmedInput }];
+    setChatHistory(newHistoryWithUser);
     setUserInput('');
+    setIsLoading(true);
 
     try {
       const context = getCombinedTextContent();
-      const response = await answerFromDocuments(trimmedInput, context);
-      setChatHistory([...newHistory, { role: 'assistant' as const, content: response }]);
+      const response = await answerFromDocuments(trimmedInput, context, chatHistory);
+      setChatHistory([...newHistoryWithUser, { role: 'assistant' as const, content: response }]);
     } catch (error) {
       console.error(error);
-      setChatHistory([...newHistory, { role: 'assistant' as const, content: 'Spiacente, si è verificato un errore. Per favore, riprova.' }]);
+      setChatHistory([...newHistoryWithUser, { role: 'assistant' as const, content: 'Spiacente, si è verificato un errore. Per favore, riprova.' }]);
     } finally {
       setIsLoading(false);
     }
