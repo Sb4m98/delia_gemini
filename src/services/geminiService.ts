@@ -1,15 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { GraphData } from '../types';
 
-// La chiave API viene ora letta da process.env, che è popolato dal processo di build di Vite
-// grazie alla configurazione in vite.config.ts.
-const apiKey = process.env.API_KEY;
-
-if (!apiKey) {
-    throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati di crearla nelle impostazioni del tuo progetto Vercel.");
+if (!process.env.API_KEY) {
+    throw new Error("La variabile d'ambiente API_KEY non è impostata");
 }
 
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const graphResponseSchema = {
   type: Type.OBJECT,
@@ -89,10 +85,13 @@ export const generateProcessGraphFromContext = async (prompt: string, context: s
 
 export const answerFromDocuments = async (question: string, context: string): Promise<string> => {
     const fullPrompt = `
-      Sei un assistente intelligente. Rispondi alla domanda dell'utente basandoti ESCLUSIVAMENTE sul contesto del documento fornito.
-      La tua risposta deve essere in italiano.
-      Se la risposta non può essere trovata nel contesto, dichiara di non riuscire a trovare l'informazione nei documenti forniti.
-      Sii specifico e cita parti del contesto quando possibile. Formatta la tua risposta usando Markdown (ad esempio, usa **testo** per il grassetto e '*' per gli elenchi puntati).
+      Sei un assistente AI esperto nell'analisi di documenti. Il tuo compito è rispondere alle domande degli utenti basandoti ESCLUSIVAMENTE sulle informazioni contenute nel CONTESTO fornito.
+
+      Istruzioni chiave:
+      1.  **Lingua della Risposta:** Rispondi SEMPRE E SOLO in italiano.
+      2.  **Sintesi e Formattazione:** Se l'utente chiede di riassumere, confrontare o presentare le informazioni in un formato specifico (come una tabella, una matrice o un elenco puntato), devi creare tale formato. Non limitarti a cercare il formato nel testo, ma sintetizza le informazioni per costruirlo. Usa il Markdown per la formattazione (es. tabelle, grassetto, elenchi). Quando crei una tabella, assicurati che sia chiara, ben strutturata e completa.
+      3.  **Aderenza al Contesto:** Non inventare informazioni. Se i dati necessari per rispondere completamente alla domanda (o per costruire una tabella) non sono presenti nel contesto, rispondi utilizzando solo le informazioni disponibili e segnala chiaramente quali informazioni mancano.
+      4.  **Risposta Negativa:** Se nessuna informazione pertinente alla domanda è presente nel contesto, dichiara in modo cortese di non aver trovato la risposta nei documenti.
 
       CONTESTO:
       ---
@@ -101,7 +100,7 @@ export const answerFromDocuments = async (question: string, context: string): Pr
       
       DOMANDA: "${question}"
 
-      RISPOSTA:
+      RISPOSTA (in italiano e formato Markdown):
     `;
 
     try {
