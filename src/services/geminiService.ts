@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { GraphData } from '../types';
+import type { GraphData, ChatMessage } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("La variabile d'ambiente API_KEY non è impostata");
@@ -83,30 +83,49 @@ export const generateProcessGraphFromContext = async (prompt: string, context: s
 };
 
 
-export const answerFromDocuments = async (question: string, context: string): Promise<string> => {
+export const answerFromDocuments = async (question: string, context: string, chatHistory: ChatMessage[]): Promise<string> => {
+    const recentHistory = chatHistory
+        .slice(-6) // Prendi le ultime 6 interazioni
+        .map(msg => `${msg.role === 'user' ? 'Utente' : 'Assistente'}: ${msg.content}`)
+        .join('\n');
+
     const fullPrompt = `
-      Sei un assistente AI esperto nell'analisi di documenti. Il tuo compito è rispondere alle domande degli utenti basandoti ESCLUSIVAMENTE sulle informazioni contenute nel CONTESTO fornito.
+      Sei un assistente AI esperto nell'analisi di documenti. Il tuo compito è rispondere alle domande degli utenti basandoti sulle informazioni contenute nel CONTESTO DEI DOCUMENTI e tenendo conto della CRONOLOGIA DELLA CHAT per le domande successive.
 
       Istruzioni chiave:
-      1.  **Lingua della Risposta:** Rispondi SEMPRE E SOLO in italiano.
-      2.  **Sintesi e Formattazione:** Se l'utente chiede di riassumere, confrontare o presentare le informazioni in un formato specifico (come una tabella, una matrice o un elenco puntato), devi creare tale formato. Non limitarti a cercare il formato nel testo, ma sintetizza le informazioni per costruirlo. Usa il Markdown per la formattazione (es. tabelle, grassetto, elenchi). Quando crei una tabella, assicurati che sia chiara, ben strutturata e completa.
-      3.  **Aderenza al Contesto:** Non inventare informazioni. Se i dati necessari per rispondere completamente alla domanda (o per costruire una tabella) non sono presenti nel contesto, rispondi utilizzando solo le informazioni disponibili e segnala chiaramente quali informazioni mancano.
-      4.  **Risposta Negativa:** Se nessuna informazione pertinente alla domanda è presente nel contesto, dichiara in modo cortese di non aver trovato la risposta nei documenti.
+      1.  **Contesto Conversazionale:** PRESTA MOLTA ATTENZIONE alla cronologia della chat. La domanda corrente dell'utente potrebbe riferirsi a una tabella, a un elenco o a dati che hai fornito nella tua risposta precedente. Usa questo contesto per rispondere a domande come "creane un istogramma" o "e per l'altro prodotto?".
+      2.  **Lingua della Risposta:** Rispondi SEMPRE E SOLO in italiano.
+      3.  **Sintesi e Formattazione:** Se l'utente chiede di riassumere, confrontare o presentare le informazioni in un formato specifico (come una tabella o un elenco), devi creare tale formato usando Markdown. Non limitarti a cercare il formato nel testo, ma sintetizza le informazioni per costruirlo. Presta particolare attenzione ai dati in formato tabellare, anche se la formattazione testuale è rotta; cerca di ricostruire la tabella logicamente per estrarre valori precisi.
+      4.  **Generazione Grafici (IMPORTANTE):** Se la domanda dell'utente richiede esplicitamente la creazione di un "grafico a torta" (donut chart) o di un "istogramma" (bar chart), la tua risposta DEVE essere ESCLUSIVAMENTE un oggetto JSON. Non aggiungere alcun testo o spiegazione al di fuori dell'oggetto JSON. L'oggetto JSON deve seguire questo schema:
+          - Per un grafico a torta: \`{ "type": "chart", "chartType": "donut", "title": "Titolo del grafico", "data": { "slices": [{ "label": "Etichetta1", "value": valore1 }, { "label": "Etichetta2", "value": valore2 }] } }\`
+          - Per un istogramma: \`{ "type": "chart", "chartType": "bar", "title": "Titolo del grafico", "data": { "labels": ["Etichetta1", "Etichetta2"], "values": [valore1, valore2] } }\`
+          Estrai i dati pertinenti dal CONTESTO DEI DOCUMENTI o dalla CRONOLOGIA DELLA CHAT per popolare il campo 'data'. Il titolo deve essere conciso e descrittivo.
+      5.  **Aderenza al Contesto:** Non inventare informazioni. Se i dati necessari per rispondere completamente alla domanda (o per costruire una tabella/grafico) non sono presenti nel contesto o nella cronologia, rispondi con testo normale spiegando quali informazioni mancano.
+      6.  **Risposta Negativa:** Se nessuna informazione pertinente alla domanda è presente nel contesto, dichiara in modo cortese di non aver trovato la risposta nei documenti.
 
-      CONTESTO:
+      CONTESTO DEI DOCUMENTI:
       ---
       ${context}
       ---
-      
-      DOMANDA: "${question}"
 
-      RISPOSTA (in italiano e formato Markdown):
+      CRONOLOGIA DELLA CHAT (le ultime battute):
+      ---
+      ${recentHistory}
+      ---
+      
+      DOMANDA CORRENTE DELL'UTENTE: "${question}"
+
+      RISPOSTA:
     `;
 
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: fullPrompt,
+            config: {
+                // Low temperature for more deterministic and consistent responses
+                temperature: 0.2,
+            },
         });
         return response.text;
     } catch (error) {
