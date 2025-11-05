@@ -19,9 +19,12 @@ export const ChatIcon: React.FC = () => (
 );
 
 export const ProcessIcon: React.FC<{className?: string}> = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className || "h-5 w-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-  </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" className={className || "h-5 w-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 3v12" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v6a3 3 0 01-3 3H9" />
+    </svg>
 );
 
 export const ChevronDoubleLeftIcon: React.FC<{className?: string}> = ({ className }) => (
