@@ -1,12 +1,21 @@
-import * as pdfjsLib from 'pdfjs-dist';
-// Importa l'URL del sorgente del worker utilizzando il suffisso '?url' di Vite.
-// Questo è il modo corretto e più affidabile per ottenere l'URL della risorsa in un progetto Vite.
-import workerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import type * as PdfJs from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+let pdfjsLibPromise: Promise<typeof PdfJs> | null = null;
 
+const getPdfjsLib = (): Promise<typeof PdfJs> => {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = import('pdfjs-dist').then(pdfjs => {
+      // Set worker path once the module is loaded
+      pdfjs.GlobalWorkerOptions.workerSrc = 'https://aistudiocdn.com/pdfjs-dist@^4.4.168/build/pdf.worker.mjs';
+      return pdfjs;
+    });
+  }
+  return pdfjsLibPromise;
+};
 
 export const extractTextFromPdf = async (file: File): Promise<string> => {
+  const pdfjsLib = await getPdfjsLib();
+  
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
   const numPages = pdf.numPages;
