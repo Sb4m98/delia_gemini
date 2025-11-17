@@ -154,6 +154,7 @@ export const analyzeGraphWithContext = async (prompt: string, context: string, g
       Sei un analista di processi esperto. Il tuo compito è analizzare e MODIFICARE un grafo di processo fornito in formato JSON, utilizzando anche il contesto di un documento originale.
       - Analizza la richiesta dell'utente.
       - Se la richiesta implica una modifica al grafo (es. "aggiungi un nodo", "rinomina il nodo X", "cambia la connessione"), modifica la struttura JSON del grafo di conseguenza. Assicurati che il nuovo grafo sia valido (ID univoci, archi corretti).
+      - **Gestione dei Rami:** Quando aggiungi un ramo (es. un percorso alternativo o una deviazione), considera se questo debba ricongiungersi al flusso principale. Se un nuovo ramo \`A -> D\` è stato creato come alternativa a un passo \`A -> B\` in un flusso \`A -> B -> C\`, è molto probabile che il nuovo ramo debba ricongiungersi al flusso principale, ad esempio con un arco \`D -> C\`. Aggiungi questo arco di ricongiungimento se la logica del processo lo richiede.
       - Se la richiesta è solo una domanda sul grafo (es. "qual è il collo di bottiglia?"), non modificare il grafo.
       - Fornisci una risposta testuale concisa in 'analysisText' che spieghi cosa hai fatto o che risponda alla domanda.
       - Restituisci SEMPRE la struttura del grafo (modificata o originale) nel campo 'updatedGraph'.
