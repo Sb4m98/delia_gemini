@@ -5,7 +5,7 @@ import ProcessGraph from '../graph/ProcessGraph';
 import type { ProcessGraphRef } from '../graph/ProcessGraph';
 import ChatMessageUI from '../ui/ChatMessageUI';
 import { ProcessIcon, XIcon, TrashIcon, AnalyzeIcon, ZoomInIcon, ZoomOutIcon, FitScreenIcon, ExportIcon, JsonIcon, SvgIcon } from '../ui/Icons';
-import type { GraphData, GraphNodeData } from '../../types';
+import type { GraphData, GraphNodeData, ChatMessage } from '../../types';
 
 // ================== GraphLegend Component ==================
 const GraphLegend: React.FC = () => {
@@ -174,6 +174,7 @@ const ProcessPage: React.FC = () => {
   const [userInput, setUserInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiStatus, setApiStatus] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNodeData | null>(null);
   const [isAnalyzingGraph, setIsAnalyzingGraph] = useState<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -197,38 +198,70 @@ const ProcessPage: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
-    const newHistory = [...processChatHistory, { role: 'user' as const, content: trimmedInput }];
+    setApiStatus(null);
+    const userMessage: ChatMessage = { 
+        id: `user-${Date.now()}`, 
+        role: 'user', 
+        content: trimmedInput 
+    };
+    const newHistory = [...processChatHistory, userMessage];
     setProcessChatHistory(newHistory);
     setUserInput('');
+
+    const onRetry = (attempt: number) => {
+        setApiStatus(`Il modello è sovraccarico. Riprovo (tentativo ${attempt} di 3)...`);
+    };
 
     try {
       const context = getCombinedTextContent();
       
       if (isAnalyzingGraph && graphData) {
-        const { analysisText, updatedGraph } = await analyzeGraphWithContext(trimmedInput, context, graphData);
-        setProcessChatHistory([...newHistory, { role: 'assistant' as const, content: analysisText }]);
+        const { analysisText, updatedGraph } = await analyzeGraphWithContext(trimmedInput, context, graphData, onRetry);
+        const assistantMessage: ChatMessage = { 
+            id: `assistant-${Date.now()}`, 
+            role: 'assistant', 
+            content: analysisText 
+        };
+        setProcessChatHistory(prev => [...prev, assistantMessage]);
         if (updatedGraph && updatedGraph.nodes) {
             setGraphData(updatedGraph);
         }
       } else {
         setIsAnalyzingGraph(false);
         setSelectedNode(null);
-        const data = await generateProcessGraphFromContext(trimmedInput, context);
+        const data = await generateProcessGraphFromContext(trimmedInput, context, onRetry);
         if (data.nodes.length === 0) {
           const errorMessage = "Non sono riuscito a generare un grafo. Potresti essere più specifico su un processo nei tuoi documenti?";
           setError(errorMessage);
-          setProcessChatHistory([...newHistory, { role: 'assistant' as const, content: errorMessage }]);
+          const assistantMessage: ChatMessage = { 
+              id: `assistant-error-${Date.now()}`, 
+              role: 'assistant', 
+              content: errorMessage 
+          };
+          setProcessChatHistory(prev => [...prev, assistantMessage]);
           setGraphData(null);
         } else {
           setGraphData(data);
-          setProcessChatHistory([...newHistory, { role: 'assistant' as const, content: `Ho creato un grafo di processo per te. Clicca su un nodo per vederne i dettagli o avvia l'analisi.` }]);
+          const assistantMessage: ChatMessage = { 
+              id: `assistant-${Date.now()}`, 
+              role: 'assistant', 
+              content: `Ho creato un grafo di processo per te. Clicca su un nodo per vederne i dettagli o avvia l'analisi.` 
+          };
+          setProcessChatHistory(prev => [...prev, assistantMessage]);
         }
       }
+      setApiStatus(null);
     } catch (e) {
       console.error(e);
       const errorMessage = 'Si è verificato un errore inaspettato. Per favore, riprova.';
       setError(errorMessage);
-       setProcessChatHistory([...newHistory, { role: 'assistant' as const, content: errorMessage }]);
+       const assistantMessage: ChatMessage = { 
+           id: `assistant-error-${Date.now()}`, 
+           role: 'assistant', 
+           content: errorMessage 
+       };
+       setProcessChatHistory(prev => [...prev, assistantMessage]);
+       setApiStatus(null);
     } finally {
       setIsLoading(false);
     }
@@ -240,7 +273,12 @@ const ProcessPage: React.FC = () => {
 
   const handleStartAnalysis = () => {
     setIsAnalyzingGraph(true);
-    setProcessChatHistory(prev => [...prev, { role: 'assistant', content: "Modalità analisi attivata. Ora puoi farmi domande specifiche su questo grafo." }]);
+    const assistantMessage: ChatMessage = { 
+        id: `assistant-analysis-${Date.now()}`, 
+        role: 'assistant', 
+        content: "Modalità analisi attivata. Ora puoi farmi domande specifiche su questo grafo." 
+    };
+    setProcessChatHistory(prev => [...prev, assistantMessage]);
   };
 
   const handleExport = (format: 'json' | 'svg') => {
@@ -308,8 +346,8 @@ const ProcessPage: React.FC = () => {
                 </button>
             </div>
             <div ref={chatContainerRef} className="flex-grow p-4 space-y-4 overflow-y-auto">
-                {processChatHistory.map((msg, index) => (
-                    <ChatMessageUI key={index} message={msg} />
+                {processChatHistory.map((msg) => (
+                    <ChatMessageUI key={msg.id} message={msg} />
                 ))}
                  {isLoading && <ChatMessageUI isLoading />}
             </div>
@@ -327,6 +365,9 @@ const ProcessPage: React.FC = () => {
             )}
 
             <div className="p-4 border-t border-gray-200">
+                {apiStatus && (
+                    <p className="text-center text-sm text-gray-500 mb-2">{apiStatus}</p>
+                )}
                 <div className="flex items-center space-x-2">
                 <input
                     type="text"
