@@ -156,7 +156,7 @@ export const answerFromDocuments = async (question: string, context: string, cha
 
     try {
         const response = await callApiWithRetries(() => ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-2.5-pro",
             contents: fullPrompt,
             config: {
                 // Low temperature for more deterministic and consistent responses
