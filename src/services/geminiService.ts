@@ -14,10 +14,11 @@ const INITIAL_DELAY_MS = 1000;
  * A wrapper function that attempts to call the Gemini API with exponential backoff.
  * This makes the application more resilient to temporary server overload issues.
  * @param apiCall The async function that makes the actual API call.
+ * @param onRetry Optional callback to notify the UI about a retry attempt.
  * @returns The result of the API call.
  * @throws Throws an error if the API call fails after all retries.
  */
-const callApiWithRetries = async <T>(apiCall: () => Promise<T>): Promise<T> => {
+const callApiWithRetries = async <T>(apiCall: () => Promise<T>, onRetry?: (attempt: number) => void): Promise<T> => {
     let lastError: Error | null = null;
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
@@ -29,6 +30,7 @@ const callApiWithRetries = async <T>(apiCall: () => Promise<T>): Promise<T> => {
             if (error.message && error.message.includes('overloaded')) {
                 const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
                 console.warn(`Tentativo ${attempt + 1} fallito. Modello sovraccarico. Riprovo tra ${delay}ms...`);
+                onRetry?.(attempt + 1);
                 await new Promise(resolve => setTimeout(resolve, delay));
             } else {
                 // Not a retriable error, so fail fast.
@@ -73,7 +75,7 @@ const graphResponseSchema = {
   required: ["nodes", "edges"],
 };
 
-export const generateProcessGraphFromContext = async (prompt: string, context: string): Promise<GraphData> => {
+export const generateProcessGraphFromContext = async (prompt: string, context: string, onRetry?: (attempt: number) => void): Promise<GraphData> => {
   const fullPrompt = `
     Analizza il contesto del documento fornito per generare un grafo di processo diretto basato sulla richiesta dell'utente.
     Il grafo deve rappresentare il flusso del processo descritto.
@@ -100,7 +102,7 @@ export const generateProcessGraphFromContext = async (prompt: string, context: s
           responseMimeType: "application/json",
           responseSchema: graphResponseSchema,
         },
-     }));
+     }), onRetry);
 
     const jsonText = response.text.trim();
     const parsedData = JSON.parse(jsonText) as GraphData;
@@ -117,7 +119,7 @@ export const generateProcessGraphFromContext = async (prompt: string, context: s
 };
 
 
-export const answerFromDocuments = async (question: string, context: string, chatHistory: ChatMessage[]): Promise<string> => {
+export const answerFromDocuments = async (question: string, context: string, chatHistory: ChatMessage[], onRetry?: (attempt: number) => void): Promise<string> => {
     const recentHistory = chatHistory
         .slice(-6) // Prendi le ultime 6 interazioni
         .map(msg => `${msg.role === 'user' ? 'Utente' : 'Assistente'}: ${msg.content}`)
@@ -160,7 +162,7 @@ export const answerFromDocuments = async (question: string, context: string, cha
                 // Low temperature for more deterministic and consistent responses
                 temperature: 0.2,
             },
-        }));
+        }), onRetry);
         return response.text;
     } catch (error) {
         console.error("Errore durante la chiamata all'API Gemini per la chat sui documenti:", error);
@@ -183,12 +185,12 @@ const analysisResponseSchema = {
     required: ["analysisText", "updatedGraph"],
 };
 
-export const analyzeGraphWithContext = async (prompt: string, context: string, graphData: GraphData): Promise<{ analysisText: string; updatedGraph: GraphData; }> => {
+export const analyzeGraphWithContext = async (prompt: string, context: string, graphData: GraphData, onRetry?: (attempt: number) => void): Promise<{ analysisText: string; updatedGraph: GraphData; }> => {
     const fullPrompt = `
       Sei un analista di processi esperto. Il tuo compito è analizzare e MODIFICARE un grafo di processo fornito in formato JSON, utilizzando anche il contesto di un documento originale.
       - Analizza la richiesta dell'utente.
       - Se la richiesta implica una modifica al grafo (es. "aggiungi un nodo", "rinomina il nodo X", "cambia la connessione"), modifica la struttura JSON del grafo di conseguenza. Assicurati che il nuovo grafo sia valido (ID univoci, archi corretti).
-      - **Gestione dei Rami:** Quando aggiungi un ramo (es. un percorso alternativo o una deviazione), considera se questo debba ricongiungersi al flusso principale. Se un nuovo ramo \`A -> D\` è stato creato come alternativa a un passo \`A -> B\` in un flusso \`A -> B -> C\`, è molto probabile che il nuovo ramo debba ricongiungersi al flusso principale, ad esempio con un arco \`D -> C\`. Aggiungi questo arco di ricongiungimento se la logica del processo lo richiede.
+      - **Gestione dei Rami:** Quando aggiungi un ramo (es. un percorso alternativo o una deviazione), considera se questo debba ricongiungersi al flusso principale. Se un nuovo ramo \`A -> D\` è stato creato come alternativa a un passo \`A -> B\` in un flusso \`A -> B -> C\`, è molto normale che il nuovo ramo debba ricongiungersi al flusso principale, ad esempio con un arco \`D -> C\`. Aggiungi questo arco di ricongiungimento se la logica del processo lo richiede.
       - Se la richiesta è solo una domanda sul grafo (es. "qual è il collo di bottiglia?"), non modificare il grafo.
       - Fornisci una risposta testuale concisa in 'analysisText' che spieghi cosa hai fatto o che risponda alla domanda.
       - Restituisci SEMPRE la struttura del grafo (modificata o originale) nel campo 'updatedGraph'.
@@ -216,7 +218,7 @@ export const analyzeGraphWithContext = async (prompt: string, context: string, g
                 responseMimeType: "application/json",
                 responseSchema: analysisResponseSchema,
             },
-        }));
+        }), onRetry);
         
         const jsonText = response.text.trim();
         const parsedData = JSON.parse(jsonText) as { analysisText: string; updatedGraph: GraphData; };
