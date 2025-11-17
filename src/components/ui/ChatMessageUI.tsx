@@ -1,8 +1,9 @@
-import React, { memo } from 'react';
+import React, { memo, lazy, Suspense } from 'react';
 import type { ChatMessage, ChartResponse } from '../../types';
 import MarkdownRenderer from './MarkdownRenderer';
-import DonutChart from '../charts/DonutChart';
-import BarChart from '../charts/BarChart';
+
+const DonutChart = lazy(() => import('../charts/DonutChart'));
+const BarChart = lazy(() => import('../charts/BarChart'));
 
 interface ChatMessageUIProps {
   message?: ChatMessage;
@@ -77,8 +78,10 @@ const ChatMessageUI: React.FC<ChatMessageUIProps> = ({ message, isLoading }) => 
              {chartData ? (
                 <div className="bg-white rounded-lg p-2 min-w-[400px] md:min-w-[600px]">
                     <h3 className="text-base font-bold text-center text-gray-800 mb-2">{chartData.title}</h3>
-                    {chartData.chartType === 'donut' && <DonutChart data={chartData.data as any} />}
-                    {chartData.chartType === 'bar' && <BarChart data={chartData.data as any} />}
+                    <Suspense fallback={<div className="flex justify-center items-center h-48 text-sm text-gray-500">Caricamento grafico...</div>}>
+                        {chartData.chartType === 'donut' && <DonutChart data={chartData.data as any} />}
+                        {chartData.chartType === 'bar' && <BarChart data={chartData.data as any} />}
+                    </Suspense>
                 </div>
              ) : (
                 <MarkdownRenderer content={content} />
