@@ -7,6 +7,40 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+const MAX_RETRIES = 3;
+const INITIAL_DELAY_MS = 1000;
+
+/**
+ * A wrapper function that attempts to call the Gemini API with exponential backoff.
+ * This makes the application more resilient to temporary server overload issues.
+ * @param apiCall The async function that makes the actual API call.
+ * @returns The result of the API call.
+ * @throws Throws an error if the API call fails after all retries.
+ */
+const callApiWithRetries = async <T>(apiCall: () => Promise<T>): Promise<T> => {
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+            return await apiCall();
+        } catch (error: any) {
+            lastError = error;
+            // Check if it's a transient error (e.g., 503 Service Unavailable)
+            // The Gemini SDK might not expose status codes directly, so we check the message.
+            if (error.message && error.message.includes('overloaded')) {
+                const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
+                console.warn(`Tentativo ${attempt + 1} fallito. Modello sovraccarico. Riprovo tra ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                // Not a retriable error, so fail fast.
+                throw error;
+            }
+        }
+    }
+    console.error("Tutti i tentativi di chiamata API sono falliti.", lastError);
+    throw new Error(`Impossibile comunicare con l'API Gemini dopo ${MAX_RETRIES} tentativi.`);
+};
+
+
 const graphResponseSchema = {
   type: Type.OBJECT,
   properties: {
@@ -59,14 +93,14 @@ export const generateProcessGraphFromContext = async (prompt: string, context: s
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: fullPrompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: graphResponseSchema,
-      },
-    });
+     const response = await callApiWithRetries(() => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: fullPrompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: graphResponseSchema,
+        },
+     }));
 
     const jsonText = response.text.trim();
     const parsedData = JSON.parse(jsonText) as GraphData;
@@ -119,14 +153,14 @@ export const answerFromDocuments = async (question: string, context: string, cha
     `;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await callApiWithRetries(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: fullPrompt,
             config: {
                 // Low temperature for more deterministic and consistent responses
                 temperature: 0.2,
             },
-        });
+        }));
         return response.text;
     } catch (error) {
         console.error("Errore durante la chiamata all'API Gemini per la chat sui documenti:", error);
@@ -175,14 +209,14 @@ export const analyzeGraphWithContext = async (prompt: string, context: string, g
     `;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await callApiWithRetries(() => ai.models.generateContent({
             model: "gemini-2.5-pro",
             contents: fullPrompt,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: analysisResponseSchema,
             },
-        });
+        }));
         
         const jsonText = response.text.trim();
         const parsedData = JSON.parse(jsonText) as { analysisText: string; updatedGraph: GraphData; };
