@@ -38,3 +38,22 @@ export interface GraphData {
   nodes: GraphNodeData[];
   edges: GraphEdge[];
 }
+
+// ====== Tipi per la Visualizzazione dei Grafici in Chat ======
+export interface DonutChartData {
+  slices: { label: string; value: number }[];
+}
+
+export interface BarChartData {
+  labels: string[];
+  values: number[];
+}
+
+export type ChartData = DonutChartData | BarChartData;
+
+export interface ChartResponse {
+  type: 'chart';
+  chartType: 'donut' | 'bar';
+  title: string;
+  data: ChartData;
+}
